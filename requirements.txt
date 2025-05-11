@@ -1,0 +1,6 @@
+# PyQt5 for GUI
+PyQt5>=5.15.0
+# Math and scientific computing
+numpy>=1.24.0
+# Plotting
+matplotlib>=3.7.0
