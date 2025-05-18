@@ -279,22 +279,8 @@ class HistoryWidget(QWidget):
         self.clear_btn = QPushButton("Clear")
         self.clear_btn.setFixedHeight(32)
         self.clear_btn.setMinimumWidth(70)
-        self.clear_btn.setStyleSheet("""
-            QPushButton {
-                background: #333;
-                color: #ff3b30;
-                border-radius: 4px;
-                padding: 5px 10px;
-                font-size: 13px;
-                border: 1px solid #444;
-            }
-            QPushButton:hover {
-                background: #444;
-            }
-            QPushButton:pressed {
-                background: #222;
-            }
-        """)
+        self.update_clear_button_style()
+        
         self.clear_btn.clicked.connect(self.clear_history)
         header.addStretch()
         header.addWidget(self.clear_btn)
@@ -312,13 +298,50 @@ class HistoryWidget(QWidget):
         """)
         self.setMinimumWidth(200)
 
+    def update_clear_button_style(self):
+        width = self.width() if self.width() > 0 else 200
+        base_font_size = width / 22  # Smoother division
+        btn_font_size = int(min(14, max(11, base_font_size)))
+        
+        self.clear_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: #333;
+                color: #ff3b30;
+                border-radius: 4px;
+                padding: 5px 10px;
+                font-size: {btn_font_size}px;
+                border: 1px solid #444;
+            }}
+            QPushButton:hover {{
+                background: #444;
+            }}
+            QPushButton:pressed {{
+                background: #222;
+            }}
+        """)
+
     def update_list_style(self):
         width = self.width() if self.width() > 0 else 200
-        # Dynamic font size calculation
-        font_size = min(14, max(11, width // 20))
-        # Dynamic padding calculation
-        h_padding = min(12, max(8, width // 25))
-        v_padding = min(10, max(6, width // 30))
+        height = self.height() if self.height() > 0 else 400
+        
+        # Dynamic font size calculation based on both width and height
+        # More granular calculation for smoother scaling
+        width_based_font = width / 18  # Smoother division
+        height_based_font = height / 32  # Smoother division
+        base_font_size = min(width_based_font, height_based_font)
+        
+        # Smooth clamping with interpolation
+        min_font = 10
+        max_font = 16
+        font_size = int(max(min_font, min(max_font, base_font_size)))
+        
+        # Dynamic padding calculation based on font size
+        padding_ratio = font_size / max_font  # Scale padding with font size
+        h_padding = int(min(14, max(8, 12 * padding_ratio)))
+        v_padding = int(min(12, max(6, 10 * padding_ratio)))
+        
+        # Calculate scrollbar width based on panel width
+        scrollbar_width = max(10, min(14, width // 25))
         
         self.history_list.setStyleSheet(f"""
             QListWidget {{
@@ -341,13 +364,13 @@ class HistoryWidget(QWidget):
             }}
             QScrollBar:vertical {{
                 background: #222;
-                width: {max(10, min(14, width // 25))}px;
+                width: {scrollbar_width}px;
                 margin: 0px;
             }}
             QScrollBar::handle:vertical {{
                 background: #444;
                 min-height: 20px;
-                border-radius: {max(3, min(6, width // 50))}px;
+                border-radius: {max(3, min(6, scrollbar_width // 2))}px;
             }}
             QScrollBar::handle:vertical:hover {{
                 background: #555;
@@ -373,7 +396,4 @@ class HistoryWidget(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.update_list_style()
-        
-    def showEvent(self, event):
-        super().showEvent(event)
-        self.update_list_style()
+        self.update_clear_button_style()

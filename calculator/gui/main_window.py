@@ -111,8 +111,7 @@ class MainWindow(QMainWindow):
         self.history_widget = HistoryWidget()
         self.history_widget.hide()
         self.splitter.addWidget(self.history_widget)
-        
-        # Set initial splitter sizes - calculator gets 70%, history 30%
+          # Set initial splitter sizes - calculator gets 70%, history 30%
         self.splitter.setStretchFactor(0, 7)  # Calculator side
         self.splitter.setStretchFactor(1, 3)  # History side
         
@@ -122,6 +121,7 @@ class MainWindow(QMainWindow):
         self.mode_selector.currentTextChanged.connect(self.switch_mode)
         self.normal_widget.expression_evaluated.connect(self.add_to_history)
         self.scientific_widget.expression_evaluated.connect(self.add_to_history)
+        self.splitter.splitterMoved.connect(self.on_splitter_moved)
         
         # Store sizes
         self.normal_size = QSize(400, 500)
@@ -158,6 +158,9 @@ class MainWindow(QMainWindow):
             history_width = int(min(350, max(200, current_width * 0.3)))
             self.resize(current_width + history_width, self.height())
             self.splitter.setSizes([int(current_width), int(history_width)])
+            # Update styles when showing
+            self.history_widget.update_list_style()
+            self.history_widget.update_clear_button_style()
         else:
             history_width = self.history_widget.width()
             self.history_widget.hide()
@@ -173,7 +176,8 @@ class MainWindow(QMainWindow):
         if self.width() < self.normal_size.width() + 100 and not self.history_widget.isHidden():
             self.history_widget.hide()
             self.history_btn.setChecked(False)
-        
+            return
+
         # Update history width based on window size
         if not self.history_widget.isHidden():
             total_width = self.width()
@@ -184,3 +188,11 @@ class MainWindow(QMainWindow):
             if total_width >= min_calc_width + min_history_width:
                 history_width = int(max(min_history_width, min(max_history_width, total_width - min_calc_width)))
                 self.splitter.setSizes([int(total_width - history_width), int(history_width)])
+                # Force style update after splitter resize
+                self.history_widget.update_list_style()
+                self.history_widget.update_clear_button_style()
+
+    def on_splitter_moved(self, pos, index):
+        # Update history panel styles when splitter is moved
+        self.history_widget.update_list_style()
+        self.history_widget.update_clear_button_style()
