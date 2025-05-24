@@ -79,7 +79,7 @@ class CalculatorWidget(QWidget):
             for col, btn_text in enumerate(row_buttons):
                 btn = QPushButton(btn_text)
                 btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-                btn.setFocusPolicy(Qt.NoFocus)  # Prevent focus rectangle
+                # btn.setFocusPolicy(Qt.NoFocus)  # Allow focus for keyboard navigation
                 
                 if btn_text in {"Rad", "Deg"}:
                     self.angle_buttons[btn_text] = btn
@@ -90,8 +90,8 @@ class CalculatorWidget(QWidget):
                     btn.setStyleSheet(self.button_style(btn_text))
                 
                 # Add pressed/released effects
-                btn.pressed.connect(lambda b=btn: b.setStyleSheet(self.button_style(b.text(), pressed=True, selected=(self.angle_mode==b.text().upper()))))
-                btn.released.connect(lambda b=btn: b.setStyleSheet(self.button_style(b.text(), selected=(self.angle_mode==b.text().upper()))))
+                btn.pressed.connect(lambda b=btn: self._update_button_style_on_press(b))
+                btn.released.connect(lambda b=btn: self._update_button_style_on_release(b))
                 
                 self.button_group.addButton(btn)
                 self.grid.addWidget(btn, row, col)
@@ -109,34 +109,80 @@ class CalculatorWidget(QWidget):
         """)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+    def _update_button_style_on_press(self, button):
+        text = button.text()
+        is_selected = (self.angle_mode == text.upper()) if text in {"Rad", "Deg"} else False
+        font_size = button.fontMetrics().height() # Attempt to get current font size, might need adjustment
+        # A more robust way to get font size might be needed if this is not accurate
+        # For now, we can extract it from the existing style sheet if possible or use a default
+        current_style = button.styleSheet()
+        try:
+            # Example: "font-size: 18px; ..."
+            font_size_str = current_style.split("font-size:")[1].split("px")[0].strip()
+            font_size = int(font_size_str)
+        except (IndexError, ValueError):
+            font_size = 18 # Default if not found
+
+        button.setStyleSheet(self.button_style(text, selected=is_selected, pressed=True, font_size=font_size))
+
+    def _update_button_style_on_release(self, button):
+        text = button.text()
+        is_selected = (self.angle_mode == text.upper()) if text in {"Rad", "Deg"} else False
+        current_style = button.styleSheet() # The style sheet applied on press
+        try:
+            font_size_str = current_style.split("font-size:")[1].split("px")[0].strip()
+            font_size = int(font_size_str)
+        except (IndexError, ValueError):
+            font_size = 18 # Default if not found
+            
+        button.setStyleSheet(self.button_style(text, selected=is_selected, pressed=False, font_size=font_size))
+
     def button_style(self, text, selected=False, pressed=False, font_size=18):
         # Base style with dynamic font size
-        base = f"border-radius: 8px; font-size: {font_size}px;"
+        base_style = f"border-radius: 8px; font-size: {font_size}px;"
+
+        style_config = {
+            "operator": {
+                "normal": "background: #ff9500; color: #fff; font-weight: bold;",
+                "pressed": "background: #cc7a00; color: #fff; font-weight: bold;"
+            },
+            "scientific": {
+                "normal": "background: #333; color: #ff9500;",
+                "pressed": "background: #222; color: #ff9500;"
+            },
+            "clear": {
+                "normal": "background: #444; color: #ff3b30;",
+                "pressed": "background: #a22; color: #fff;"
+            },
+            "angle": {
+                "selected_normal": "background: #ff9500; color: #fff; font-weight: bold;",
+                "selected_pressed": "background: #cc7a00; color: #fff; font-weight: bold;",
+                "normal": "background: #333; color: #ff9500;",
+                "pressed": "background: #222; color: #ff9500;"
+            },
+            "default": {
+                "normal": "background: #222; color: #fff;",
+                "pressed": "background: #111; color: #fff;"
+            }
+        }
+
+        button_type = "default"
         if text in {'+', '-', '*', '/', '=', '%', 'x^', '√', 'EXP'}:
-            if pressed:
-                return f"background: #cc7a00; color: #fff; font-weight: bold; {base}"
-            return f"background: #ff9500; color: #fff; font-weight: bold; {base}"
+            button_type = "operator"
         elif text in {'sin', 'cos', 'tan', 'ln', 'log', 'π', 'e', 'x!', '(', ')', 'Inv', 'Ans'}:
-            if pressed:
-                return f"background: #222; color: #ff9500; {base}"
-            return f"background: #333; color: #ff9500; {base}"
+            button_type = "scientific"
         elif text in {'AC', 'C'}:
-            if pressed:
-                return f"background: #a22; color: #fff; {base}"
-            return f"background: #444; color: #ff3b30; {base}"
+            button_type = "clear"
         elif text in {'Rad', 'Deg'}:
+            button_type = "angle"
+
+        current_style_key = "pressed" if pressed else "normal"
+        if button_type == "angle":
             if selected:
-                if pressed:
-                    return f"background: #cc7a00; color: #fff; font-weight: bold; {base}"
-                return f"background: #ff9500; color: #fff; font-weight: bold; {base}"
-            else:
-                if pressed:
-                    return f"background: #222; color: #ff9500; {base}"
-                return f"background: #333; color: #ff9500; {base}"
-        else:
-            if pressed:
-                return f"background: #111; color: #fff; {base}"
-            return f"background: #222; color: #fff; {base}"
+                current_style_key = f"selected_{current_style_key}"
+        
+        style = style_config[button_type][current_style_key]
+        return f"{style} {base_style}"
 
     def set_angle_mode_button(self, mode):
         self.angle_mode = mode.upper()
@@ -160,12 +206,28 @@ class CalculatorWidget(QWidget):
                 self.display.setText(str(result))
                 # Emit signal for history
                 self.expression_evaluated.emit(expr, str(result))
-            except Exception:
+            except SyntaxError:
+                self.display.setText("Syntax Error")
+            except ZeroDivisionError:
+                self.display.setText("Division by Zero")
+            except ValueError:
+                self.display.setText("Math Error (e.g. log(-1))")
+            except Exception as e:
+                # print(f"An unexpected error occurred: {e}") # For debugging
                 self.display.setText("Error")
         elif text == 'x!':
             try:
-                val = float(self.display.text())
+                val_text = self.display.text()
+                if not val_text:
+                    self.display.setText("Error: Input for x!")
+                    return
+                val = float(val_text)
+                if val < 0 or val != int(val):
+                    self.display.setText("Error: x! (must be non-neg int)")
+                    return
                 self.display.setText(str(math.factorial(int(val))))
+            except ValueError:
+                self.display.setText("Error: x! (invalid input)")
             except Exception:
                 self.display.setText("Error")
         elif text in {'sin', 'cos', 'tan'}:
@@ -207,10 +269,17 @@ class CalculatorWidget(QWidget):
             Qt.Key_5: '5', Qt.Key_6: '6', Qt.Key_7: '7', Qt.Key_8: '8', Qt.Key_9: '9',
             Qt.Key_Plus: '+', Qt.Key_Minus: '-', Qt.Key_Asterisk: '*', Qt.Key_Slash: '/',
             Qt.Key_ParenLeft: '(', Qt.Key_ParenRight: ')', Qt.Key_Period: '.',
-            Qt.Key_Equal: '=', Qt.Key_Enter: '=', Qt.Key_Return: '=', Qt.Key_Backspace: 'C'
+            Qt.Key_Equal: '=', Qt.Key_Enter: '=', Qt.Key_Return: '=', Qt.Key_Backspace: 'C',
+            Qt.Key_A: 'Angle' # Shortcut for angle mode
         }
         if key in key_map:
-            self.on_button_click(key_map[key])
+            action = key_map[key]
+            if action == 'Angle':
+                if self.mode_name == "Scientific":
+                    new_mode = 'DEG' if self.angle_mode == 'RAD' else 'RAD'
+                    self.set_angle_mode_button(new_mode)
+            else:
+                self.on_button_click(action)
         else:
             super().keyPressEvent(event)
 
@@ -253,8 +322,14 @@ class CalculatorWidget(QWidget):
                 # Update font size based on button size (keeping text readable)
                 font_size = min(btn_h // 3, btn_w // 4)
                 font_size = max(8, min(font_size, 24))  # Allow smaller font size but cap the maximum
+                
+                # Retrieve the correct selected state for angle buttons
+                is_selected = False
+                if btn.text() in {"Rad", "Deg"}:
+                    is_selected = (self.angle_mode == btn.text().upper())
+
                 btn.setStyleSheet(self.button_style(btn.text(), 
-                                                  selected=(self.angle_mode==btn.text().upper()),
+                                                  selected=is_selected,
                                                   font_size=font_size))
 
 class GraphicCalculatorWidget(QWidget):

@@ -124,31 +124,43 @@ class MainWindow(QMainWindow):
         self.splitter.splitterMoved.connect(self.on_splitter_moved)
         
         # Store sizes
-        self.normal_size = QSize(400, 500)
-        self.scientific_size = QSize(600, 650)
-        self.history_width = 250
-        
+        self.NORMAL_CALCULATOR_SIZE = QSize(400, 500)
+        self.SCIENTIFIC_CALCULATOR_SIZE = QSize(600, 650)
+        self.DEFAULT_HISTORY_WIDTH = 250
+        self.MIN_HISTORY_WIDTH_THRESHOLD = 100 # Min width before history auto-hides
+        self.MIN_CALCULATOR_WIDTH_WITH_HISTORY = self.NORMAL_CALCULATOR_SIZE.width() + self.MIN_HISTORY_WIDTH_THRESHOLD
+
         self.switch_mode("Normal")
 
-    def switch_mode(self, mode):
+    def _resize_window_for_mode(self, mode_size):
         current_size = self.size()
         history_visible = not self.history_widget.isHidden()
-        extra_width = self.history_width if history_visible else 0
-        
+        extra_width = self.history_widget.width() if history_visible else 0
+        # If history is shown, use its current width, otherwise consider a default if we were to show it.
+        # However, for mode switching, we primarily care about the calculator area itself.
+
+        new_width = mode_size.width()
+        new_height = mode_size.height()
+
+        if history_visible:
+            new_width += self.history_widget.width() # Keep history width consistent during mode switch
+
+        # Only resize if the current size is smaller than the target mode size
+        # or if the height is too small for the target mode.
+        if current_size.width() < new_width or current_size.height() < new_height:
+            self.resize(new_width, new_height)
+
+    def switch_mode(self, mode):
         if mode == "Normal":
             self.stack.setCurrentWidget(self.normal_widget)
-            if current_size.width() < self.normal_size.width() + extra_width or \
-               current_size.height() < self.normal_size.height():
-                self.resize(self.normal_size.width() + extra_width, self.normal_size.height())
-                
+            self._resize_window_for_mode(self.NORMAL_CALCULATOR_SIZE)
         elif mode == "Scientific":
             self.stack.setCurrentWidget(self.scientific_widget)
-            if current_size.width() < self.scientific_size.width() + extra_width or \
-               current_size.height() < self.scientific_size.height():
-                self.resize(self.scientific_size.width() + extra_width, self.scientific_size.height())
-                
+            self._resize_window_for_mode(self.SCIENTIFIC_CALCULATOR_SIZE)
         elif mode == "Graphic":
             self.stack.setCurrentWidget(self.graphic_widget)
+            # Assuming graphic mode might have its own preferred size
+            # self._resize_window_for_mode(self.GRAPHIC_CALCULATOR_SIZE) # Example
 
     def toggle_history(self):
         if self.history_widget.isHidden():
@@ -173,7 +185,7 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         # Auto-hide history if window becomes too small
-        if self.width() < self.normal_size.width() + 100 and not self.history_widget.isHidden():
+        if self.width() < self.MIN_CALCULATOR_WIDTH_WITH_HISTORY and not self.history_widget.isHidden():
             self.history_widget.hide()
             self.history_btn.setChecked(False)
             return
@@ -181,7 +193,7 @@ class MainWindow(QMainWindow):
         # Update history width based on window size
         if not self.history_widget.isHidden():
             total_width = self.width()
-            min_calc_width = self.normal_size.width()
+            min_calc_width = self.NORMAL_CALCULATOR_SIZE.width()
             max_history_width = int(min(350, total_width * 0.3))  # 30% of window width, max 350px
             min_history_width = int(min(200, total_width * 0.2))  # 20% of window width, min 200px
             
